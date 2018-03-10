@@ -90,7 +90,6 @@ def minkowskiDist(distMat, p):
     return np.power(np.sum(distMat, axis = 1), float(1/p))
 
 
-# NOTE: avoiding ties would be a good idea
 @measure.performance
 def simpleVoting(neighbours):
     '''simple voting'''
@@ -100,7 +99,11 @@ def simpleVoting(neighbours):
             votes[category] = 1
         else:
             votes[category] += 1
-    return max(votes.items(), key=lambda tup: tup[1])[0]
+    sorted_votes = sorted(votes.items(), key=lambda tup: tup[1])
+    if len(sorted_votes) > 1 and sorted_votes[-1] == sorted_votes[-2]:
+        return simpleVoting(sorted(neighbours, key=lambda tup: tup[0])[1:])
+    return sorted_votes[-1][0]
+    # return max(votes.items(), key=lambda tup: tup[1])[0]
 
 @measure.performance
 def weightedVoting(neighbours):
@@ -111,7 +114,11 @@ def weightedVoting(neighbours):
             votes[category] = 1/dist
         else:
             votes[category] += 1/dist
-    return max(votes.items(), key=lambda tup: tup[1])[0]
+    sorted_votes = sorted(votes.items(), key=lambda tup: tup[1])
+    if len(sorted_votes) > 1 and sorted_votes[-1] == sorted_votes[-2]:
+        return simpleVoting(sorted(neighbours, key=lambda tup: tup[0])[1:])
+    return sorted_votes[-1][0]
+    # return max(votes.items(), key=lambda tup: tup[1])[0]
 
 #dictionaries - map strings to function pointer
 metrics = {
