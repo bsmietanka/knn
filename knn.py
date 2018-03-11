@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import measure
 
-# kNN class algorithm
 class kNN:
 
     '''class for classifying objects using kNN algorithm'''
@@ -37,6 +36,76 @@ class kNN:
         print("\nClassification complete")
         return cls
 
+    @measure.performance
+    def euclideanDist(distMat):
+        '''euclidean metric'''
+        distMat = np.square(distMat)
+        # could be done without square root for performance gain,
+        # but it may influence weighted voting
+        return np.power(np.sum(distMat, axis = 1), 2)
+
+    @measure.performance
+    def taxicabDist(distMat):
+        '''taxicab metric'''
+        return np.sum(np.absolute(distMat), axis = 1)
+
+    @measure.performance
+    def chebyshevDist(distMat):
+        '''Chebyshev metric'''
+        return np.amax(distMat, axis = 1)
+
+    # calling this metric requires slight change in approach
+    # as it requires additional argument
+    @measure.performance
+    def minkowskiDist(distMat, p):
+        '''Minkowski metric'''
+        distMat = np.power(distMat, p)
+        return np.power(np.sum(distMat, axis = 1), float(1/p))
+
+
+    @measure.performance
+    def simpleVoting(neighbours):
+        '''simple voting'''
+        votes = {}
+        for dist, category in neighbours:
+            if votes.get(category) == None:
+                votes[category] = 1
+            else:
+                votes[category] += 1
+        sorted_votes = sorted(votes.items(), key=lambda tup: tup[1])
+        if len(sorted_votes) > 1 and sorted_votes[-1] == sorted_votes[-2]:
+            return simpleVoting(sorted(neighbours, key=lambda tup: tup[0])[1:])
+        return sorted_votes[-1][0]
+        # return max(votes.items(), key=lambda tup: tup[1])[0]
+
+    @measure.performance
+    def weightedVoting(neighbours):
+        '''weighted variant of voting - weights are reciprocal of distance'''
+        votes = {}
+        for (dist, category) in neighbours:
+            if votes.get(category) == None:
+                votes[category] = 1/dist
+            else:
+                votes[category] += 1/dist
+        sorted_votes = sorted(votes.items(), key=lambda tup: tup[1])
+        if len(sorted_votes) > 1 and sorted_votes[-1] == sorted_votes[-2]:
+            return simpleVoting(sorted(neighbours, key=lambda tup: tup[0])[1:])
+        return sorted_votes[-1][0]
+        # return max(votes.items(), key=lambda tup: tup[1])[0]
+
+    # static dictionaries - map strings to function pointer
+    metrics = {
+        'euclidean' : euclideanDist,
+        'taxicab' : taxicabDist,
+        'chebyshev' : chebyshevDist#,
+        #'minkowski' : minkowskiDist
+        }
+
+    votings = {
+        'simple' : simpleVoting,
+        'weighted' : weightedVoting
+        }
+
     def calculateAccuracy(self, results, reference):
         '''calculate classification accuracy'''
         return np.sum(results == reference) / len(results)
@@ -63,84 +132,14 @@ def readDataSetFromCsv(filename):
             classes.append(int(row[-1]))
     return {'features' : np.array(features), 'class' : np.array(classes)}
 
-@measure.performance
-def euclideanDist(distMat):
-   '''euclidean metric'''
-   distMat = np.square(distMat)
-   # could be done without square root for performance gain,
-   # but it may influence weighted voting
-   return np.power(np.sum(distMat, axis = 1), 2)
-
-@measure.performance
-def taxicabDist(distMat):
-    '''taxicab metric'''
-    return np.sum(np.absolute(distMat), axis = 1)
-
-@measure.performance
-def chebyshevDist(distMat):
-    '''Chebyshev metric'''
-    return np.amax(distMat, axis = 1)
-
-# calling this metric requires slight change in approach
-# as it requires additional argument
-@measure.performance
-def minkowskiDist(distMat, p):
-    '''Minkowski metric'''
-    distMat = np.power(distMat, p)
-    return np.power(np.sum(distMat, axis = 1), float(1/p))
-
-
-@measure.performance
-def simpleVoting(neighbours):
-    '''simple voting'''
-    votes = {}
-    for dist, category in neighbours:
-        if votes.get(category) == None:
-            votes[category] = 1
-        else:
-            votes[category] += 1
-    sorted_votes = sorted(votes.items(), key=lambda tup: tup[1])
-    if len(sorted_votes) > 1 and sorted_votes[-1] == sorted_votes[-2]:
-        return simpleVoting(sorted(neighbours, key=lambda tup: tup[0])[1:])
-    return sorted_votes[-1][0]
-    # return max(votes.items(), key=lambda tup: tup[1])[0]
-
-@measure.performance
-def weightedVoting(neighbours):
-    '''weighted variant of voting - weights are reciprocal of distance'''
-    votes = {}
-    for (dist, category) in neighbours:
-        if votes.get(category) == None:
-            votes[category] = 1/dist
-        else:
-            votes[category] += 1/dist
-    sorted_votes = sorted(votes.items(), key=lambda tup: tup[1])
-    if len(sorted_votes) > 1 and sorted_votes[-1] == sorted_votes[-2]:
-        return simpleVoting(sorted(neighbours, key=lambda tup: tup[0])[1:])
-    return sorted_votes[-1][0]
-    # return max(votes.items(), key=lambda tup: tup[1])[0]
-
-#dictionaries - map strings to function pointer
-metrics = {
-    'euclidean' : euclideanDist,
-    'taxicab' : taxicabDist,
-    'chebyshev' : chebyshevDist#,
-    #'minkowski' : minkowskiDist
-    }
-
-votings = {
-    'simple' : simpleVoting,
-    'weighted' : weightedVoting
-    }
-
 def main():
     #create args parser and parse args
     parser = argparse.ArgumentParser(description='k Nearest Neighbours algorithm')
     parser.add_argument('trainingSetPath', metavar='training_set_path', help='path to a training set in .csv')
     parser.add_argument('testSetPath', metavar='test_set_path', help='path to a test set in .csv')
     parser.add_argument('-k', type=int, default=5, help='number of neighbours')
-    parser.add_argument('-m', '--metric', default='euclidean', choices=metrics.keys(), help='metric used to calculate distance')
-    parser.add_argument('-v', '--voting', default='simple', choices=votings.keys(), help='voting scheme used in the kNN algorithm')
+    parser.add_argument('-m', '--metric', default='euclidean', choices=kNN.metrics.keys(), help='metric used to calculate distance')
+    parser.add_argument('-v', '--voting', default='simple', choices=kNN.votings.keys(), help='voting scheme used in the kNN algorithm')
     parser.add_argument('-d', '--dst', help='output destination')
     args = parser.parse_args()
 
@@ -149,7 +148,7 @@ def main():
     testSet = readDataSetFromCsv(args.testSetPath)
 
     #knn algorithm
-    knn = kNN(args.k, metrics[args.metric], votings[args.voting])
+    knn = kNN(args.k, kNN.metrics[args.metric], kNN.votings[args.voting])
     cls = np.array(knn.classify(trainingSet, testSet['features'], args.dst))
 
     acc = knn.calculateAccuracy(cls, testSet['class'])
